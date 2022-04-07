@@ -40,7 +40,7 @@ private:
 
     unique_ptr<SSLApp> m_sslApp;
 
-    unique_ptr<WebSocket<true, true, ConnectionData>> m_websocket;
+    WebSocket<true, true, ConnectionData>* m_websocket;
 
     /** ssl config */
     SocketContextOptions m_socketContextOptions = {

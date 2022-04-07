@@ -31,20 +31,24 @@ Websocket_Connection::Websocket_Connection(const string& target) {
         },
         .open = [&](WebSocket<true, true, ConnectionData>* ws) {
             std::cout << "Websocket client " << ws->getUserData()->address << " connected!" << std::endl;
-            m_websocket = unique_ptr<WebSocket<true, true, ConnectionData>>(ws);
         },
         .message = [&](WebSocket<true, true, ConnectionData>* ws, std::string_view message, OpCode opCode) {
+            m_websocket = ws;
             data = json::parse(message);
             std::cout << "<<<<<<< REQUEST" << std::endl;
             std::cout << data.dump(2) << std::endl;
             std::cout << "=======" << std::endl;
+
+            dynamic_cast<SCGI_Connection*>(m_peer.get())->init();
             receive_from(1);
+            dynamic_cast<SCGI_Connection*>(m_peer.get())->close();
         }
     }).listen(m_ip, m_port, [&](us_listen_socket_t* listen_socket) {
         if (listen_socket) {
             std::cout << "Listening websocket on " << m_ip << ":" << m_port << std::endl;
         } else std::cout << "Listen failed on " << m_ip << ":" << m_port << std::endl;
     });
+
     m_sslApp = std::make_unique<SSLApp>(std::move(sslApp));
 }
 
@@ -56,7 +60,6 @@ bool Websocket_Connection::send_to(json command, int type) {
         m_websocket->send(data.dump(), OpCode::TEXT);
         std::cout << data.dump(2) << std::endl;
         std::cout << ">>>>>>> RESPONSE" << std::endl;
-        std::cout << "Message sent to websocket client successfully, connection to rTorrent had been closed so can not took new message any more!" << std::endl;
         return true;
     }
     // send to peer

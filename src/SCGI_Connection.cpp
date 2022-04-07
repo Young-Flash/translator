@@ -2,64 +2,7 @@
 #include "Websocket_Connection.h"
 
 SCGI_Connection::SCGI_Connection(const string& target) {
-    const auto &delimPos = target.find_first_of(':');
-
-    int result = 0;
-    int sock = 0;
-    void *sa = nullptr;
-    unsigned long sa_size = 0;
-    if (delimPos != std::string::npos) {
-        const std::string host(target.substr(0, delimPos));
-        const std::string port(target.substr(delimPos + 1));
-
-        sa_size = sizeof(::sockaddr_in);
-        sa = ::calloc(1, sa_size);
-        struct ::sockaddr_in *sin = (struct ::sockaddr_in *)sa;
-
-        sin->sin_family = AF_INET;
-        sin->sin_port = ::htons(std::stoi(port));
-
-        result = ::inet_pton(AF_INET, host.c_str(), &sin->sin_addr);
-        if (result <= 0) {
-            std::cout << "Invalid address: " << result << std::endl;
-            return;
-        }
-
-        sock = ::socket(AF_INET, SOCK_STREAM, 0);
-    } else {
-        sa_size = sizeof(sockaddr_un);
-        sa = ::calloc(1, sa_size);
-        struct sockaddr_un *sun = (struct sockaddr_un *)sa;
-
-        sun->sun_family = AF_UNIX;
-
-        if (target.size() > sizeof(sun->sun_path)) {
-            std::cout << "Invalid path" << std::endl;
-            return;
-        }
-
-        ::strncpy(sun->sun_path, target.data(), target.size());
-
-        sock = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    }
-
-    if (sock < 0) {
-        std::cout << "Failed to create socket: " << sock << std::endl;
-        return;
-    }
-
-    result = ::connect(sock, (struct sockaddr *)sa, sa_size);
-    if (result < 0) {
-        std::cout << "Failed to connect: " << result << std::endl;
-        ::free(sa);
-        return;
-    }
-    else {
-        std::cout << "Connected to rTorrent: " << target << std::endl;
-    }
-
-    ::free(sa);
-    m_sock = sock;
+    m_target = target;
 }
 
 bool SCGI_Connection::send_to(json command, int type) {
@@ -140,6 +83,75 @@ json& SCGI_Connection::receive_from(int type) {
 
 SCGI_Connection::~SCGI_Connection() {
     if (m_sock != -1) {
+        ::close(m_sock);
+        m_sock = -1;
+    }
+}
+
+void SCGI_Connection::init() {
+    const auto &delimPos = m_target.find_first_of(':');
+
+    int result = 0;
+    int sock = 0;
+    void *sa = nullptr;
+    unsigned long sa_size = 0;
+    if (delimPos != std::string::npos) {
+        const std::string host(m_target.substr(0, delimPos));
+        const std::string port(m_target.substr(delimPos + 1));
+
+        sa_size = sizeof(::sockaddr_in);
+        sa = ::calloc(1, sa_size);
+        struct ::sockaddr_in *sin = (struct ::sockaddr_in *)sa;
+
+        sin->sin_family = AF_INET;
+        sin->sin_port = ::htons(std::stoi(port));
+
+        result = ::inet_pton(AF_INET, host.c_str(), &sin->sin_addr);
+        if (result <= 0) {
+            std::cout << "Invalid address: " << result << std::endl;
+            return;
+        }
+
+        sock = ::socket(AF_INET, SOCK_STREAM, 0);
+    } else {
+        sa_size = sizeof(sockaddr_un);
+        sa = ::calloc(1, sa_size);
+        struct sockaddr_un *sun = (struct sockaddr_un *)sa;
+
+        sun->sun_family = AF_UNIX;
+
+        if (m_target.size() > sizeof(sun->sun_path)) {
+            std::cout << "Invalid path" << std::endl;
+            return;
+        }
+
+        ::strncpy(sun->sun_path, m_target.data(), m_target.size());
+
+        sock = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    }
+
+    if (sock < 0) {
+        std::cout << "Failed to create socket: " << sock << std::endl;
+        return;
+    }
+
+    result = ::connect(sock, (struct sockaddr *)sa, sa_size);
+    if (result < 0) {
+        std::cout << "Failed to connect: " << result << ", check your server status" << std::endl;
+        ::free(sa);
+        return;
+    }
+    else {
+        std::cout << "Connected to rTorrent: " << m_target << std::endl;
+    }
+
+    ::free(sa);
+    m_sock = sock;
+}
+
+void SCGI_Connection::close() {
+    if (m_sock != -1) {
+        std::cout << "SCGI_Connection::close()" << std::endl;
         ::close(m_sock);
         m_sock = -1;
     }
